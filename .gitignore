@@ -1,0 +1,41 @@
+# 依赖
+node_modules/
+
+# 日志
+*.log
+npm-debug.log*
+
+# 用户数据（不上传）
+server/cookies/
+server/storage/
+server/uploads/
+server/browser-data/
+
+# 测试文件（不上传）
+test-report.txt
+test-upload.js
+测试.bat
+一键测试混淆版.bat
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 构建输出
+dist/
+build/
+
+# 环境变量
+.env
+.env.local
+.env.*.local
+
+# 临时文件
+*.tmp
+*.temp

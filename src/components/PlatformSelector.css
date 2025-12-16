@@ -1,0 +1,135 @@
+.platform-selector {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+}
+
+.selector-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.selector-count {
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.platforms-grid {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+}
+
+.platform-card {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    padding: var(--spacing-md);
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-sm);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    position: relative;
+}
+
+.platform-card:hover {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.12);
+}
+
+.platform-card.selected {
+    background: rgba(99, 102, 241, 0.1);
+    border-color: var(--accent-primary);
+}
+
+.platform-card.not-logged-in {
+    opacity: 0.7;
+}
+
+.platform-card.not-logged-in:hover {
+    opacity: 1;
+}
+
+.platform-icon {
+    font-size: 28px;
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: var(--border-radius-xs);
+}
+
+.platform-info {
+    flex: 1;
+}
+
+.platform-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 2px;
+}
+
+.platform-status {
+    font-size: 12px;
+}
+
+.status-logged-in {
+    color: var(--success);
+}
+
+.status-not-logged-in {
+    color: var(--text-muted);
+}
+
+.platform-card.not-logged-in:hover .status-not-logged-in {
+    color: var(--accent-primary);
+}
+
+.platform-check {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--accent-primary);
+    color: white;
+    border-radius: 50%;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.platform-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+}
+
+.btn-relogin {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all var(--transition-fast);
+    opacity: 0;
+}
+
+.platform-card:hover .btn-relogin {
+    opacity: 1;
+}
+
+.btn-relogin:hover {
+    background: rgba(245, 158, 11, 0.2);
+    border-color: var(--warning);
+    transform: rotate(180deg);
+}
