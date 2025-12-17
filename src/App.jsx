@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import VideoUploader from './components/VideoUploader'
+import VideoEditor from './components/VideoEditor'
 import AIEditor from './components/AIEditor'
 import PlatformSelector from './components/PlatformSelector'
 import UploadProgress from './components/UploadProgress'
@@ -29,6 +30,7 @@ function App() {
     // 平台状态
     const [selectedPlatforms, setSelectedPlatforms] = useState([])
     const [platformStatus, setPlatformStatus] = useState({})
+    const [accountSet, setAccountSet] = useState(1) // 全局账号组：1或2
 
     // UI状态
     const [isUploading, setIsUploading] = useState(false)
@@ -143,24 +145,8 @@ function App() {
         setCurrentLoginPlatform(null)
     }
 
-    // 处理重新登录
-    const handleRelogin = async (platformId) => {
-        // 先清除该平台的Cookie
-        try {
-            await fetch(`/api/platforms/${platformId}/logout`, { method: 'DELETE' })
-        } catch (e) {
-            console.error('Logout error:', e)
-        }
-
-        // 更新状态为未登录
-        setPlatformStatus(prev => ({
-            ...prev,
-            [platformId]: { ...prev[platformId], loggedIn: false }
-        }))
-
-        // 从已选中列表移除
-        setSelectedPlatforms(prev => prev.filter(id => id !== platformId))
-
+    // 处理重新登录（使用当前账号组）
+    const handleRelogin = async (platformId, accountNum) => {
         // 打开登录弹窗
         setCurrentLoginPlatform(platformId)
         setShowLogin(true)
@@ -189,6 +175,7 @@ function App() {
             formData.append('content', content)
             formData.append('tags', JSON.stringify(tags))
             formData.append('platforms', JSON.stringify(selectedPlatforms))
+            formData.append('accountSet', accountSet.toString())
 
             const response = await fetch('/api/upload', {
                 method: 'POST',
@@ -294,6 +281,17 @@ function App() {
                         videoPreviewUrl={videoPreviewUrl}
                         onVideoSelect={handleVideoSelect}
                     />
+
+                    {/* 视频处理 */}
+                    {videoFile && (
+                        <VideoEditor
+                            videoFile={videoFile}
+                            videoUrl={videoPreviewUrl}
+                            onProcessed={(result) => {
+                                console.log('视频处理完成:', result)
+                            }}
+                        />
+                    )}
                 </section>
 
                 {/* 中间：AI编辑器 */}
@@ -321,6 +319,8 @@ function App() {
                         onToggle={handlePlatformToggle}
                         onSelectAllNotLoggedIn={handleSelectAllPlatforms}
                         onRelogin={handleRelogin}
+                        accountSet={accountSet}
+                        onAccountSetChange={setAccountSet}
                     />
 
                     <div className="divider"></div>
@@ -362,6 +362,7 @@ function App() {
             {showLogin && (
                 <LoginModal
                     platform={PLATFORMS.find(p => p.id === currentLoginPlatform)}
+                    accountNum={accountSet}
                     onConfirm={handleLoginConfirm}
                     onClose={() => {
                         setShowLogin(false)

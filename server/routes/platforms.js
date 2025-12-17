@@ -47,31 +47,35 @@ const platformConfigs = {
     }
 }
 
-// 获取所有平台状态
+// 检查单个账号Cookie是否有效
+function checkCookieValid(platformId, accountNum) {
+    const cookieFile = join(cookiesDir, `${platformId}_${accountNum}.json`)
+    if (fs.existsSync(cookieFile)) {
+        try {
+            const cookies = JSON.parse(fs.readFileSync(cookieFile, 'utf-8'))
+            const isValid = cookies.some(c => {
+                if (!c.expires) return true
+                return new Date(c.expires * 1000) > new Date()
+            })
+            return isValid
+        } catch (e) {
+            return false
+        }
+    }
+    return false
+}
+
+// 获取所有平台状态（包含双账号）
 router.get('/status', async (req, res) => {
     const status = {}
 
     for (const [platformId, config] of Object.entries(platformConfigs)) {
-        const cookieFile = join(cookiesDir, `${platformId}.json`)
-
-        if (fs.existsSync(cookieFile)) {
-            try {
-                const cookies = JSON.parse(fs.readFileSync(cookieFile, 'utf-8'))
-                // 检查Cookie是否过期
-                const isValid = cookies.some(c => {
-                    if (!c.expires) return true
-                    return new Date(c.expires * 1000) > new Date()
-                })
-
-                status[platformId] = {
-                    loggedIn: isValid,
-                    name: config.name
-                }
-            } catch (e) {
-                status[platformId] = { loggedIn: false, name: config.name }
-            }
-        } else {
-            status[platformId] = { loggedIn: false, name: config.name }
+        status[platformId] = {
+            name: config.name,
+            account1: { loggedIn: checkCookieValid(platformId, 1) },
+            account2: { loggedIn: checkCookieValid(platformId, 2) },
+            // 向后兼容：任一账号登录即为已登录
+            loggedIn: checkCookieValid(platformId, 1) || checkCookieValid(platformId, 2)
         }
     }
 
@@ -122,9 +126,10 @@ router.post('/:platformId/login', async (req, res) => {
     })
 })
 
-// 打开浏览器进行登录
+// 打开浏览器进行登录（支持账号参数）
 router.post('/:platformId/open-browser', async (req, res) => {
     const { platformId } = req.params
+    const { accountNum = 1 } = req.body // 默认账号1
     const config = platformConfigs[platformId]
 
     if (!config) {
@@ -133,9 +138,9 @@ router.post('/:platformId/open-browser', async (req, res) => {
 
     try {
         const { browserManager } = await import('../services/browserManager.js')
-        await browserManager.openLoginPage(platformId, config)
+        await browserManager.openLoginPage(platformId, config, accountNum)
 
-        res.json({ success: true, message: '浏览器已打开' })
+        res.json({ success: true, message: `浏览器已打开 (账号${accountNum})` })
     } catch (error) {
         console.error('Open browser error:', error)
         res.status(500).json({ error: error.message })

@@ -10,18 +10,19 @@ const platformUploaders = {
 }
 
 class PlatformUploader {
-    async upload(platformId, data, onProgress) {
+    async upload(platformId, data, onProgress, accountNum = 1) {
         const uploader = platformUploaders[platformId]
         if (!uploader) {
             throw new Error(`不支持的平台: ${platformId}`)
         }
-        return await uploader(data, onProgress)
+        // 传递账号参数
+        return await uploader(data, onProgress, accountNum)
     }
 }
 
 // ==================== 哔哩哔哩 ====================
-async function uploadToBilibili(data, onProgress) {
-    const page = await browserManager.getPage('bilibili')
+async function uploadToBilibili(data, onProgress, accountNum = 1) {
+    const page = await browserManager.getPage('bilibili', accountNum)
 
     try {
         console.log('[Bilibili] 开始上传...')
@@ -119,8 +120,8 @@ async function uploadToBilibili(data, onProgress) {
 }
 
 // ==================== 抖音 ====================
-async function uploadToDouyin(data, onProgress) {
-    const page = await browserManager.getPage('douyin')
+async function uploadToDouyin(data, onProgress, accountNum = 1) {
+    const page = await browserManager.getPage('douyin', accountNum)
 
     try {
         console.log('[Douyin] 开始上传...')
@@ -210,8 +211,8 @@ async function uploadToDouyin(data, onProgress) {
 }
 
 // ==================== 小红书 ====================
-async function uploadToXiaohongshu(data, onProgress) {
-    const page = await browserManager.getPage('xiaohongshu')
+async function uploadToXiaohongshu(data, onProgress, accountNum = 1) {
+    const page = await browserManager.getPage('xiaohongshu', accountNum)
 
     try {
         console.log('[Xiaohongshu] 开始上传...')
@@ -281,6 +282,37 @@ async function uploadToXiaohongshu(data, onProgress) {
             }
             console.log('[Xiaohongshu] 话题已添加')
         }
+        onProgress(85)
+
+        // ★★★ 勾选原创声明 ★★★
+        console.log('[Xiaohongshu] 勾选原创声明...')
+        try {
+            // 1. 点击"声明原创"按钮打开弹窗
+            const declareBtn = page.locator('text=声明原创').first()
+            if (await declareBtn.count() > 0) {
+                await declareBtn.click()
+                await page.waitForTimeout(1500)
+
+                // 2. 勾选"我已阅读并同意《原创声明须知》"
+                const agreeCheckbox = page.locator('text=我已阅读并同意').first()
+                if (await agreeCheckbox.count() > 0) {
+                    await agreeCheckbox.click()
+                    console.log('[Xiaohongshu] 已勾选同意条款')
+                    await page.waitForTimeout(500)
+
+                    // 3. 点击确认按钮（弹窗中的第二个"声明原创"按钮）
+                    const confirmBtns = page.locator('button:has-text("声明原创")')
+                    const count = await confirmBtns.count()
+                    if (count > 0) {
+                        // 点击最后一个（弹窗中的确认按钮）
+                        await confirmBtns.nth(count - 1).click()
+                        console.log('[Xiaohongshu] 已确认原创声明')
+                    }
+                }
+            }
+        } catch (e) {
+            console.log('[Xiaohongshu] 勾选原创声明失败:', e.message)
+        }
         onProgress(90)
 
         console.log('[Xiaohongshu] ✓ 信息填写完成，请手动检查后发布')
@@ -294,8 +326,8 @@ async function uploadToXiaohongshu(data, onProgress) {
 }
 
 // ==================== 快手 ====================
-async function uploadToKuaishou(data, onProgress) {
-    const page = await browserManager.getPage('kuaishou')
+async function uploadToKuaishou(data, onProgress, accountNum = 1) {
+    const page = await browserManager.getPage('kuaishou', accountNum)
 
     try {
         console.log('[Kuaishou] 开始上传...')
@@ -312,31 +344,65 @@ async function uploadToKuaishou(data, onProgress) {
 
         // ★★★ 关闭所有可能的新手指引弹窗 ★★★
         console.log('[Kuaishou] 关闭新手指引弹窗...')
-        for (let i = 0; i < 5; i++) {
-            try {
-                // 尝试各种关闭按钮
-                const closeButtons = [
-                    'button:has-text("我知道了")',
-                    'button:has-text("知道了")',
-                    'button:has-text("跳过")',
-                    'button:has-text("关闭")',
-                    'button:has-text("下一步")',
-                    '.close-btn',
-                    '[class*="close"]',
-                    '[class*="skip"]'
-                ]
 
-                for (const selector of closeButtons) {
+        // 定义关闭弹窗的辅助函数
+        const closeGuidePopups = async () => {
+            const closeButtons = [
+                // 常见按钮文字
+                'button:has-text("我知道了")',
+                'button:has-text("知道了")',
+                'button:has-text("跳过")',
+                'button:has-text("关闭")',
+                'button:has-text("下一步")',
+                'button:has-text("完成")',
+                'button:has-text("立即体验")',
+                'button:has-text("开始使用")',
+                'button:has-text("好的")',
+                'button:has-text("确定")',
+                // 通过文本匹配
+                'text=我知道了',
+                'text=知道了',
+                'text=跳过',
+                // 类名匹配
+                '[class*="close-btn"]',
+                '[class*="closeBtn"]',
+                '[class*="close-icon"]',
+                '[class*="closeIcon"]',
+                '[class*="guide"] [class*="close"]',
+                '[class*="modal"] [class*="close"]',
+                '[class*="dialog"] [class*="close"]',
+                '[class*="popup"] [class*="close"]',
+                '[class*="mask"] [class*="close"]',
+                // X 图标按钮
+                '[aria-label="关闭"]',
+                '[aria-label="close"]',
+                '[title="关闭"]',
+                // 新手指引特定
+                '[class*="guide"] button',
+                '[class*="novice"] button',
+                '[class*="tutorial"] button'
+            ]
+
+            for (const selector of closeButtons) {
+                try {
                     const btn = page.locator(selector).first()
                     if (await btn.count() > 0 && await btn.isVisible()) {
                         await btn.click()
                         console.log(`[Kuaishou] 关闭弹窗: ${selector}`)
                         await page.waitForTimeout(500)
+                        return true
                     }
+                } catch (e) {
+                    // 忽略单个选择器错误
                 }
-            } catch (e) {
-                // 忽略错误
             }
+            return false
+        }
+
+        // 循环尝试关闭弹窗（最多10次）
+        for (let i = 0; i < 10; i++) {
+            const closed = await closeGuidePopups()
+            if (!closed) break
             await page.waitForTimeout(500)
         }
 
@@ -354,10 +420,11 @@ async function uploadToKuaishou(data, onProgress) {
 
         await page.waitForTimeout(5000)
 
-        // 再次尝试关闭弹窗
-        const knowButton = page.locator('button:has-text("我知道了")').first()
-        if (await knowButton.count() > 0) {
-            await knowButton.click()
+        // 再次尝试关闭弹窗（上传后可能出现新的指引）
+        for (let i = 0; i < 5; i++) {
+            const closed = await closeGuidePopups()
+            if (!closed) break
+            await page.waitForTimeout(500)
         }
 
         // 填写描述 - 参考 social-auto-upload
@@ -391,8 +458,8 @@ async function uploadToKuaishou(data, onProgress) {
 }
 
 // ==================== 微信视频号 ====================
-async function uploadToWechat(data, onProgress) {
-    const page = await browserManager.getPage('wechat')
+async function uploadToWechat(data, onProgress, accountNum = 1) {
+    const page = await browserManager.getPage('wechat', accountNum)
 
     try {
         console.log('[WeChat] 开始上传...')

@@ -4,6 +4,52 @@
     gap: var(--spacing-md);
 }
 
+/* 账号组切换 */
+.account-set-toggle {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: rgba(102, 126, 234, 0.1);
+    border: 1px solid rgba(102, 126, 234, 0.3);
+    border-radius: 10px;
+    margin-bottom: 8px;
+}
+
+.toggle-label {
+    font-size: 14px;
+    color: var(--text-secondary, #aaa);
+}
+
+.toggle-buttons {
+    display: flex;
+    gap: 8px;
+}
+
+.toggle-btn {
+    padding: 8px 20px;
+    font-size: 14px;
+    font-weight: 600;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 20px;
+    background: transparent;
+    color: var(--text-secondary, #aaa);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.toggle-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+.toggle-btn.active {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    border-color: transparent;
+    color: white;
+    box-shadow: 0 2px 10px rgba(102, 126, 234, 0.3);
+}
+
 .selector-header {
     display: flex;
     justify-content: space-between;
@@ -132,4 +178,47 @@
     background: rgba(245, 158, 11, 0.2);
     border-color: var(--warning);
     transform: rotate(180deg);
+}
+
+/* 账号选择器 */
+.account-selector {
+    display: flex;
+    gap: 4px;
+    margin: 4px 0;
+}
+
+.account-btn {
+    width: 24px;
+    height: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.05);
+    color: rgba(255, 255, 255, 0.5);
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.account-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+.account-btn.active {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: white;
+}
+
+.account-btn.logged-in {
+    border-color: var(--success);
+}
+
+.account-btn.active.logged-in {
+    background: var(--success);
+    border-color: var(--success);
 }

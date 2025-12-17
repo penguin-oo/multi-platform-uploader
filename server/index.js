@@ -5,6 +5,7 @@ import { dirname, join } from 'path'
 import uploadRoutes from './routes/upload.js'
 import aiRoutes from './routes/ai.js'
 import platformRoutes from './routes/platforms.js'
+import videoRoutes from './routes/video.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -19,11 +20,13 @@ app.use(express.urlencoded({ extended: true }))
 
 // 静态文件（用于存储上传的视频）
 app.use('/uploads', express.static(join(__dirname, 'uploads')))
+app.use('/processed', express.static(join(__dirname, 'processed')))
 
 // API路由
 app.use('/api/upload', uploadRoutes)
 app.use('/api/ai', aiRoutes)
 app.use('/api/platforms', platformRoutes)
+app.use('/api/video', videoRoutes)
 
 // 健康检查
 app.get('/api/health', (req, res) => {

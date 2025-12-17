@@ -29,7 +29,7 @@ const storage = multer.diskStorage({
 const upload = multer({
     storage,
     limits: {
-        fileSize: 500 * 1024 * 1024 // 500MB限制
+        fileSize: 5 * 1024 * 1024 * 1024 // 5GB限制
     },
     fileFilter: (req, file, cb) => {
         if (file.mimetype.startsWith('video/')) {
@@ -43,6 +43,26 @@ const upload = multer({
 // 任务存储
 const tasks = new Map()
 
+// 单独上传视频文件（用于视频处理）
+router.post('/file', upload.single('video'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: '没有上传视频文件' })
+        }
+
+        res.json({
+            success: true,
+            filename: req.file.filename,
+            originalName: req.file.originalname,
+            size: req.file.size,
+            path: `/uploads/${req.file.filename}`
+        })
+    } catch (error) {
+        console.error('文件上传失败:', error)
+        res.status(500).json({ error: '文件上传失败' })
+    }
+})
+
 // 上传视频
 router.post('/', upload.single('video'), async (req, res) => {
     try {
@@ -50,7 +70,7 @@ router.post('/', upload.single('video'), async (req, res) => {
             return res.status(400).json({ error: '没有上传视频文件' })
         }
 
-        const { title, content, tags, platforms } = req.body
+        const { title, content, tags, platforms, accountSet } = req.body
         const taskId = uuidv4()
 
         // 创建任务
@@ -66,6 +86,7 @@ router.post('/', upload.single('video'), async (req, res) => {
             content,
             tags: JSON.parse(tags || '[]'),
             platforms: JSON.parse(platforms || '[]'),
+            accountSet: parseInt(accountSet) || 1, // 账号组：1或2
             status: 'pending',
             createdAt: new Date(),
             platformProgress: {}
@@ -136,7 +157,7 @@ async function startUploadTask(task) {
                 progress: 10
             }
 
-            // 执行上传
+            // 执行上传（传递账号组参数）
             const result = await platformUploader.upload(platformId, {
                 videoPath: task.video.path,
                 title: task.title,
@@ -144,7 +165,7 @@ async function startUploadTask(task) {
                 tags: task.tags
             }, (progress) => {
                 task.platformProgress[platformId].progress = progress
-            })
+            }, task.accountSet)
 
             // 更新成功状态
             task.platformProgress[platformId] = {

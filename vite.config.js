@@ -9,6 +9,14 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:3001',
         changeOrigin: true
+      },
+      '/processed': {
+        target: 'http://localhost:3001',
+        changeOrigin: true
+      },
+      '/uploads': {
+        target: 'http://localhost:3001',
+        changeOrigin: true
       }
     }
   }

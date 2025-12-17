@@ -15,9 +15,10 @@ if (!fs.existsSync(cookiesDir)) {
 class BrowserManager {
     constructor() {
         this.browser = null          // 单一浏览器实例
-        this.context = null          // 单一上下文
+        this.contexts = {}           // 每个账号组独立上下文: { 1: context1, 2: context2 }
         this.chromium = null
         this.currentPlatform = null
+        this.currentAccount = 1      // 当前账号：1 或 2
     }
 
     // 延迟加载 Playwright
@@ -34,9 +35,14 @@ class BrowserManager {
         return this.chromium
     }
 
-    // 打开登录页面
-    async openLoginPage(platformId, config) {
-        console.log(`Opening login page for ${platformId}: ${config.loginUrl}`)
+    // 获取Cookie文件路径（支持账号）
+    getCookieFile(platformId, accountNum = 1) {
+        return join(cookiesDir, `${platformId}_${accountNum}.json`)
+    }
+
+    // 打开登录页面（支持账号）
+    async openLoginPage(platformId, config, accountNum = 1) {
+        console.log(`Opening login page for ${platformId} (账号${accountNum}): ${config.loginUrl}`)
 
         const chromium = await this.getPlaywright()
 
@@ -52,7 +58,7 @@ class BrowserManager {
         })
 
         // 加载已保存的Cookie
-        await this.loadCookies(context, platformId)
+        await this.loadCookies(context, platformId, accountNum)
 
         const page = await context.newPage()
 
@@ -60,9 +66,9 @@ class BrowserManager {
         const saveCookies = async () => {
             try {
                 const cookies = await context.cookies()
-                const cookieFile = join(cookiesDir, `${platformId}.json`)
+                const cookieFile = this.getCookieFile(platformId, accountNum)
                 fs.writeFileSync(cookieFile, JSON.stringify(cookies, null, 2))
-                console.log(`Cookies saved for ${platformId}`)
+                console.log(`Cookies saved for ${platformId} (账号${accountNum})`)
             } catch (e) {
                 console.error('Failed to save cookies:', e)
             }
@@ -79,15 +85,15 @@ class BrowserManager {
         return { browser, context, page }
     }
 
-    // 加载Cookie
-    async loadCookies(context, platformId) {
-        const cookieFile = join(cookiesDir, `${platformId}.json`)
+    // 加载Cookie（支持账号）
+    async loadCookies(context, platformId, accountNum = 1) {
+        const cookieFile = this.getCookieFile(platformId, accountNum)
         if (fs.existsSync(cookieFile)) {
             try {
                 const cookies = JSON.parse(fs.readFileSync(cookieFile, 'utf-8'))
                 if (Array.isArray(cookies) && cookies.length > 0) {
                     await context.addCookies(cookies)
-                    console.log(`Loaded ${cookies.length} cookies for ${platformId}`)
+                    console.log(`Loaded ${cookies.length} cookies for ${platformId} (账号${accountNum})`)
                 }
             } catch (e) {
                 console.error('Failed to load cookies:', e)
@@ -95,84 +101,112 @@ class BrowserManager {
         }
     }
 
-    // 保存当前Cookie
-    async saveCookies(platformId) {
-        if (!this.context) return
+    // 保存当前Cookie（支持账号）
+    async saveCookies(platformId, accountNum = 1) {
+        const context = this.contexts[accountNum]
+        if (!context) return
         try {
-            const cookies = await this.context.cookies()
-            const cookieFile = join(cookiesDir, `${platformId}.json`)
+            const cookies = await context.cookies()
+            const cookieFile = this.getCookieFile(platformId, accountNum)
             fs.writeFileSync(cookieFile, JSON.stringify(cookies, null, 2))
-            console.log(`Cookies saved for ${platformId}`)
+            console.log(`Cookies saved for ${platformId} (账号${accountNum})`)
         } catch (e) {
             console.error('Failed to save cookies:', e)
         }
     }
 
-    // 获取或创建页面（同一浏览器窗口，每个平台新建标签页）
-    async getPage(platformId) {
-        // 如果已经有浏览器实例，在同一个浏览器中创建新标签页
-        if (this.browser && this.context) {
-            // 保存之前平台的Cookie
-            if (this.currentPlatform && this.currentPlatform !== platformId) {
-                await this.saveCookies(this.currentPlatform)
+    // 检查账号登录状态
+    checkAccountStatus(platformId, accountNum = 1) {
+        const cookieFile = this.getCookieFile(platformId, accountNum)
+        if (fs.existsSync(cookieFile)) {
+            try {
+                const cookies = JSON.parse(fs.readFileSync(cookieFile, 'utf-8'))
+                return Array.isArray(cookies) && cookies.length > 0
+            } catch (e) {
+                return false
             }
+        }
+        return false
+    }
 
-            // 加载新平台的Cookie
-            await this.loadCookies(this.context, platformId)
-
-            // 创建新的标签页（不关闭旧的）
-            console.log(`[BrowserManager] 为 ${platformId} 创建新标签页...`)
-            const newPage = await this.context.newPage()
-            this.currentPlatform = platformId
-
-            return newPage
+    // 获取或创建指定账号组的上下文
+    async getOrCreateContext(accountNum) {
+        // 如果该账号组已有上下文，直接返回
+        if (this.contexts[accountNum]) {
+            return this.contexts[accountNum]
         }
 
-        // 首次创建浏览器
-        const chromium = await this.getPlaywright()
+        // 确保浏览器已启动
+        if (!this.browser) {
+            const chromium = await this.getPlaywright()
+            console.log('[BrowserManager] 启动浏览器...')
+            this.browser = await chromium.launch({
+                headless: false,
+                args: ['--start-maximized', '--no-sandbox']
+            })
 
-        console.log('[BrowserManager] 启动浏览器...')
-        this.browser = await chromium.launch({
-            headless: false,
-            args: ['--start-maximized', '--no-sandbox']
-        })
+            // 浏览器关闭时清理
+            this.browser.on('disconnected', () => {
+                console.log('[BrowserManager] 浏览器已关闭')
+                this.browser = null
+                this.contexts = {}
+                this.currentPlatform = null
+            })
+        }
 
-        this.context = await this.browser.newContext({
+        // 为该账号组创建独立的上下文
+        console.log(`[BrowserManager] 为账号组${accountNum}创建独立上下文...`)
+        const context = await this.browser.newContext({
             viewport: null,
             userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
         })
 
-        // 加载Cookie
-        await this.loadCookies(this.context, platformId)
+        this.contexts[accountNum] = context
+        return context
+    }
 
-        const page = await this.context.newPage()
-        this.currentPlatform = platformId
+    // 获取或创建页面（支持账号）
+    async getPage(platformId, accountNum = 1) {
+        const platformKey = `${platformId}_${accountNum}`
 
-        // 浏览器关闭时清理
-        this.browser.on('disconnected', () => {
-            console.log('[BrowserManager] 浏览器已关闭')
-            this.browser = null
-            this.context = null
-            this.currentPlatform = null
-        })
+        // 获取或创建该账号组的独立上下文
+        const context = await this.getOrCreateContext(accountNum)
 
-        return page
+        // 保存之前平台的Cookie
+        if (this.currentPlatform && this.currentPlatform !== platformKey) {
+            const [prevPlatform, prevAccount] = this.currentPlatform.split('_')
+            await this.saveCookies(prevPlatform, parseInt(prevAccount) || 1)
+        }
+
+        // 加载新平台的Cookie
+        await this.loadCookies(context, platformId, accountNum)
+
+        // 创建新的标签页
+        console.log(`[BrowserManager] 为 ${platformId} (账号${accountNum}) 创建新标签页...`)
+        const newPage = await context.newPage()
+        this.currentPlatform = platformKey
+        this.currentAccount = accountNum
+
+        return newPage
     }
 
     // 为保持向后兼容，保留 getContext 方法
-    async getContext(platformId) {
-        await this.getPage(platformId)
+    async getContext(platformId, accountNum = 1) {
+        await this.getPage(platformId, accountNum)
+        const context = this.contexts[accountNum]
         return {
-            newPage: async () => this.context.newPage(),
-            cookies: async () => this.context.cookies(),
-            addCookies: async (cookies) => this.context.addCookies(cookies)
+            newPage: async () => context.newPage(),
+            cookies: async () => context.cookies(),
+            addCookies: async (cookies) => context.addCookies(cookies)
         }
     }
 
     // 关闭浏览器
     async close() {
+        // 保存所有账号组的Cookie
         if (this.currentPlatform) {
-            await this.saveCookies(this.currentPlatform)
+            const [platform, account] = this.currentPlatform.split('_')
+            await this.saveCookies(platform, parseInt(account) || 1)
         }
         if (this.browser) {
             try {
@@ -181,7 +215,7 @@ class BrowserManager {
                 // 忽略
             }
             this.browser = null
-            this.context = null
+            this.contexts = {}
             this.currentPlatform = null
         }
     }

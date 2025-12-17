@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import './LoginModal.css'
 
-function LoginModal({ platform, onConfirm, onClose }) {
+function LoginModal({ platform, accountNum = 1, onConfirm, onClose }) {
     const [isLoading, setIsLoading] = useState(false)
     const [loginUrl, setLoginUrl] = useState('')
     const [error, setError] = useState('')
@@ -35,9 +35,11 @@ function LoginModal({ platform, onConfirm, onClose }) {
     }
 
     const handleOpenBrowser = () => {
-        // 通知后端打开浏览器
+        // 通知后端打开浏览器（传递账号参数）
         fetch(`/api/platforms/${platform.id}/open-browser`, {
-            method: 'POST'
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ accountNum })
         })
     }
 
@@ -47,7 +49,7 @@ function LoginModal({ platform, onConfirm, onClose }) {
                 <div className="modal-header">
                     <h2>
                         <span className="platform-icon">{platform.icon}</span>
-                        登录 {platform.name}
+                        登录 {platform.name} (账号{accountNum})
                     </h2>
                     <button className="btn btn-ghost btn-icon modal-close" onClick={onClose}>
                         ✕
