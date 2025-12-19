@@ -287,10 +287,11 @@ async function uploadToXiaohongshu(data, onProgress, accountNum = 1) {
         // ★★★ 勾选原创声明 ★★★
         console.log('[Xiaohongshu] 勾选原创声明...')
         try {
-            // 1. 点击"声明原创"按钮打开弹窗
-            const declareBtn = page.locator('text=声明原创').first()
-            if (await declareBtn.count() > 0) {
-                await declareBtn.click()
+            // 1. 点击"去声明"链接打开弹窗（不是"声明原创"）
+            const goDeclareBtn = page.locator('text=去声明').first()
+            if (await goDeclareBtn.count() > 0) {
+                await goDeclareBtn.click()
+                console.log('[Xiaohongshu] 已点击去声明')
                 await page.waitForTimeout(1500)
 
                 // 2. 勾选"我已阅读并同意《原创声明须知》"
@@ -300,15 +301,15 @@ async function uploadToXiaohongshu(data, onProgress, accountNum = 1) {
                     console.log('[Xiaohongshu] 已勾选同意条款')
                     await page.waitForTimeout(500)
 
-                    // 3. 点击确认按钮（弹窗中的第二个"声明原创"按钮）
-                    const confirmBtns = page.locator('button:has-text("声明原创")')
-                    const count = await confirmBtns.count()
-                    if (count > 0) {
-                        // 点击最后一个（弹窗中的确认按钮）
-                        await confirmBtns.nth(count - 1).click()
+                    // 3. 点击"声明原创"确认按钮
+                    const confirmBtn = page.locator('button:has-text("声明原创")').first()
+                    if (await confirmBtn.count() > 0) {
+                        await confirmBtn.click()
                         console.log('[Xiaohongshu] 已确认原创声明')
                     }
                 }
+            } else {
+                console.log('[Xiaohongshu] 未找到"去声明"按钮，可能已声明或不支持')
             }
         } catch (e) {
             console.log('[Xiaohongshu] 勾选原创声明失败:', e.message)
@@ -348,6 +349,9 @@ async function uploadToKuaishou(data, onProgress, accountNum = 1) {
         // 定义关闭弹窗的辅助函数
         const closeGuidePopups = async () => {
             const closeButtons = [
+                // ★ react-joyride 新手指引跳过按钮（最重要）
+                '[aria-label="Skip"]',
+                '[aria-label="skip"]',
                 // 常见按钮文字
                 'button:has-text("我知道了")',
                 'button:has-text("知道了")',
@@ -363,7 +367,9 @@ async function uploadToKuaishou(data, onProgress, accountNum = 1) {
                 'text=我知道了',
                 'text=知道了',
                 'text=跳过',
-                // 类名匹配
+                'text=下一步',
+                // 类名匹配 - 快手特定
+                '[class*="_close_"]',
                 '[class*="close-btn"]',
                 '[class*="closeBtn"]',
                 '[class*="close-icon"]',
@@ -372,15 +378,12 @@ async function uploadToKuaishou(data, onProgress, accountNum = 1) {
                 '[class*="modal"] [class*="close"]',
                 '[class*="dialog"] [class*="close"]',
                 '[class*="popup"] [class*="close"]',
-                '[class*="mask"] [class*="close"]',
+                '[class*="joyride"] button',
                 // X 图标按钮
                 '[aria-label="关闭"]',
                 '[aria-label="close"]',
-                '[title="关闭"]',
-                // 新手指引特定
-                '[class*="guide"] button',
-                '[class*="novice"] button',
-                '[class*="tutorial"] button'
+                '[aria-label="Close"]',
+                '[title="关闭"]'
             ]
 
             for (const selector of closeButtons) {
