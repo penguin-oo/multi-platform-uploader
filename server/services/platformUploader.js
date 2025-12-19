@@ -352,22 +352,20 @@ async function uploadToKuaishou(data, onProgress, accountNum = 1) {
                 // ★ react-joyride 新手指引跳过按钮（最重要）
                 '[aria-label="Skip"]',
                 '[aria-label="skip"]',
-                // 常见按钮文字
+                // 常见关闭按钮文字（避免误触发推广按钮）
                 'button:has-text("我知道了")',
                 'button:has-text("知道了")',
                 'button:has-text("跳过")',
                 'button:has-text("关闭")',
-                'button:has-text("下一步")',
                 'button:has-text("完成")',
-                'button:has-text("立即体验")',
-                'button:has-text("开始使用")',
                 'button:has-text("好的")',
                 'button:has-text("确定")',
+                // 注意：移除了"立即体验"和"开始使用"，这些会误触发页面上的推广按钮
+                // 注意：移除了"下一步"，避免在多步引导中循环
                 // 通过文本匹配
                 'text=我知道了',
                 'text=知道了',
                 'text=跳过',
-                'text=下一步',
                 // 类名匹配 - 快手特定
                 '[class*="_close_"]',
                 '[class*="close-btn"]',
@@ -377,8 +375,7 @@ async function uploadToKuaishou(data, onProgress, accountNum = 1) {
                 '[class*="guide"] [class*="close"]',
                 '[class*="modal"] [class*="close"]',
                 '[class*="dialog"] [class*="close"]',
-                '[class*="popup"] [class*="close"]',
-                '[class*="joyride"] button',
+                '[class*="joyride"] [aria-label="Skip"]',
                 // X 图标按钮
                 '[aria-label="关闭"]',
                 '[aria-label="close"]',
