@@ -101,17 +101,50 @@ class BrowserManager {
         }
     }
 
-    // 保存当前Cookie（支持账号）
+
+
+    // 获取平台对应的域名关键词（用于过滤 StorageState）
+    getPlatformDomain(platformId) {
+        const domains = {
+            'douyin': ['douyin.com'],
+            'kuaishou': ['kuaishou.com'],
+            'xiaohongshu': ['xiaohongshu.com'],
+            'bilibili': ['bilibili.com'],
+            'wechat': ['weixin.qq.com', 'qq.com']
+        }
+        return domains[platformId] || []
+    }
+
+    // 保存当前Cookie和Storage（支持账号）
     async saveCookies(platformId, accountNum = 1) {
         const context = this.contexts[accountNum]
         if (!context) return
         try {
-            const cookies = await context.cookies()
+            // 获取完整的 StorageState (Cookies + LocalStorage)
+            const state = await context.storageState()
+
+            // 根据平台过滤数据
+            const platformDomains = this.getPlatformDomain(platformId)
+
+            if (platformDomains.length > 0) {
+                // 1. 过滤 Cookies
+                state.cookies = state.cookies.filter(cookie =>
+                    platformDomains.some(domain => cookie.domain.includes(domain))
+                )
+
+                // 2. 过滤 LocalStorage (origins)
+                if (state.origins) {
+                    state.origins = state.origins.filter(origin =>
+                        platformDomains.some(domain => origin.origin.includes(domain))
+                    )
+                }
+            }
+
             const cookieFile = this.getCookieFile(platformId, accountNum)
-            fs.writeFileSync(cookieFile, JSON.stringify(cookies, null, 2))
-            console.log(`Cookies saved for ${platformId} (账号${accountNum})`)
+            fs.writeFileSync(cookieFile, JSON.stringify(state, null, 2))
+            console.log(`Storage state saved for ${platformId} (账号${accountNum})`)
         } catch (e) {
-            console.error('Failed to save cookies:', e)
+            console.error('Failed to save storage state:', e)
         }
     }
 
@@ -120,8 +153,10 @@ class BrowserManager {
         const cookieFile = this.getCookieFile(platformId, accountNum)
         if (fs.existsSync(cookieFile)) {
             try {
-                const cookies = JSON.parse(fs.readFileSync(cookieFile, 'utf-8'))
-                return Array.isArray(cookies) && cookies.length > 0
+                const content = JSON.parse(fs.readFileSync(cookieFile, 'utf-8'))
+                // 兼容旧版 Cookie 数组和新版 StorageState 对象
+                const cookies = Array.isArray(content) ? content : (content.cookies || [])
+                return cookies.length > 0
             } catch (e) {
                 return false
             }
@@ -156,17 +191,37 @@ class BrowserManager {
 
         // 为该账号组创建独立的上下文
         console.log(`[BrowserManager] 为账号组${accountNum}创建独立上下文...`)
+
+        // 1. 合并所有平台的 StorageState
+        const platforms = ['bilibili', 'douyin', 'xiaohongshu', 'kuaishou', 'wechat']
+        const combinedState = { cookies: [], origins: [] }
+
+        for (const platform of platforms) {
+            const cookieFile = this.getCookieFile(platform, accountNum)
+            if (fs.existsSync(cookieFile)) {
+                try {
+                    const content = JSON.parse(fs.readFileSync(cookieFile, 'utf-8'))
+                    if (Array.isArray(content)) {
+                        // 旧版格式：仅 Cookie 数组
+                        combinedState.cookies.push(...content)
+                    } else {
+                        // 新版格式：StorageState 对象
+                        if (content.cookies) combinedState.cookies.push(...content.cookies)
+                        if (content.origins) combinedState.origins.push(...content.origins)
+                    }
+                    console.log(`Loaded state for ${platform} (账号${accountNum})`)
+                } catch (e) {
+                    console.error(`Failed to load state for ${platform}:`, e)
+                }
+            }
+        }
+
+        // 2. 使用合并后的 State 创建上下文
         const context = await this.browser.newContext({
             viewport: null,
-            userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            storageState: combinedState // 注入 Cookie 和 LocalStorage
         })
-
-        // 预加载所有平台的 Cookie 到新上下文
-        const platforms = ['bilibili', 'douyin', 'xiaohongshu', 'kuaishou', 'wechat']
-        for (const platform of platforms) {
-            await this.loadCookies(context, platform, accountNum)
-        }
-        console.log(`[BrowserManager] 已预加载账号组${accountNum}的所有平台Cookie`)
 
         this.contexts[accountNum] = context
         return context
