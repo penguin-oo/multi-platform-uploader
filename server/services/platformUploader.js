@@ -123,6 +123,29 @@ async function uploadToBilibili(data, onProgress, accountNum = 1) {
 async function uploadToDouyin(data, onProgress, accountNum = 1) {
     const page = await browserManager.getPage('douyin', accountNum)
 
+    // 登录状态检测函数
+    const checkLoginStatus = async () => {
+        const loginIndicators = [
+            'text=手机号登录',
+            'text=扫码登录',
+            'text=验证码登录',
+            'text=密码登录',
+            'text=请登录',
+            '[class*="login"]'
+        ]
+        for (const selector of loginIndicators) {
+            try {
+                const count = await page.locator(selector).count()
+                if (count > 0 && await page.locator(selector).first().isVisible()) {
+                    return false // 需要登录
+                }
+            } catch (e) {
+                // 忽略
+            }
+        }
+        return true // 已登录
+    }
+
     try {
         console.log('[Douyin] 开始上传...')
         onProgress(10)
@@ -137,9 +160,8 @@ async function uploadToDouyin(data, onProgress, accountNum = 1) {
         await page.waitForTimeout(5000)
 
         // 检查是否需要登录
-        const needLogin = await page.locator('text=手机号登录').count() + await page.locator('text=扫码登录').count()
-        if (needLogin > 0) {
-            throw new Error('Cookie已失效，请重新登录')
+        if (!await checkLoginStatus()) {
+            throw new Error('Cookie已失效，请重新登录抖音')
         }
 
         // 抖音文件上传选择器 - 参考 social-auto-upload
@@ -152,6 +174,13 @@ async function uploadToDouyin(data, onProgress, accountNum = 1) {
         console.log('[Douyin] 等待跳转到发布页面...')
         let publishPageReached = false
         for (let i = 0; i < 120; i++) {
+            // 每隔一段时间检查登录状态
+            if (i % 30 === 0 && i > 0) {
+                if (!await checkLoginStatus()) {
+                    throw new Error('上传过程中登录状态失效，请重新登录')
+                }
+            }
+
             const url = page.url()
             if (url.includes('publish') || url.includes('post/video')) {
                 publishPageReached = true
@@ -161,6 +190,10 @@ async function uploadToDouyin(data, onProgress, accountNum = 1) {
         }
 
         if (!publishPageReached) {
+            // 再次检查登录状态
+            if (!await checkLoginStatus()) {
+                throw new Error('等待发布页面时登录状态失效，请重新登录')
+            }
             console.log('[Douyin] 等待发布页面超时，尝试继续...')
         }
         onProgress(50)

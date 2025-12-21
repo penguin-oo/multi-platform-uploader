@@ -161,6 +161,13 @@ class BrowserManager {
             userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
         })
 
+        // 预加载所有平台的 Cookie 到新上下文
+        const platforms = ['bilibili', 'douyin', 'xiaohongshu', 'kuaishou', 'wechat']
+        for (const platform of platforms) {
+            await this.loadCookies(context, platform, accountNum)
+        }
+        console.log(`[BrowserManager] 已预加载账号组${accountNum}的所有平台Cookie`)
+
         this.contexts[accountNum] = context
         return context
     }
