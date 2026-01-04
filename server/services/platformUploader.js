@@ -9,6 +9,48 @@ const platformUploaders = {
     wechat: uploadToWechat
 }
 
+// ==================== 通用等待登录函数 ====================
+/**
+ * 等待用户登录
+ * @param {Page} page - Playwright 页面对象
+ * @param {string} platformId - 平台ID
+ * @param {Function} checkLoginFn - 检查登录状态的函数，返回 true 表示已登录
+ * @param {Function} onProgress - 进度回调
+ * @param {number} accountNum - 账号组
+ * @param {number} maxWaitSeconds - 最大等待时间（秒）
+ */
+async function waitForLogin(page, platformId, checkLoginFn, onProgress, accountNum = 1, maxWaitSeconds = 300) {
+    console.log(`[${platformId}] 检测到未登录，等待用户扫码登录...`)
+
+    // 通知前端显示等待登录状态
+    if (typeof onProgress === 'function') {
+        onProgress({
+            type: 'waiting_login',
+            message: `请在浏览器中扫码登录${platformId}`,
+            platform: platformId
+        })
+    }
+
+    for (let i = 0; i < maxWaitSeconds; i++) {
+        // 每秒检查一次登录状态
+        if (await checkLoginFn()) {
+            console.log(`[${platformId}] ✓ 登录成功！`)
+            // 登录成功后保存 Cookie
+            await browserManager.saveCookies(platformId.toLowerCase(), accountNum)
+            console.log(`[${platformId}] Cookie 已保存`)
+            return true
+        }
+        await page.waitForTimeout(1000)
+
+        // 每30秒打印一次等待信息
+        if (i > 0 && i % 30 === 0) {
+            console.log(`[${platformId}] 仍在等待登录... (${i}/${maxWaitSeconds}秒)`)
+        }
+    }
+
+    throw new Error(`登录等待超时（${maxWaitSeconds}秒）`)
+}
+
 class PlatformUploader {
     async upload(platformId, data, onProgress, accountNum = 1) {
         const uploader = platformUploaders[platformId]
@@ -24,6 +66,27 @@ class PlatformUploader {
 async function uploadToBilibili(data, onProgress, accountNum = 1) {
     const page = await browserManager.getPage('bilibili', accountNum)
 
+    // 登录状态检测函数
+    const checkLoginStatus = async () => {
+        const loginIndicators = [
+            'text=登录',
+            'text=请先登录',
+            '.login-tip',
+            '[class*="login-panel"]'
+        ]
+        for (const selector of loginIndicators) {
+            try {
+                const el = page.locator(selector).first()
+                if (await el.count() > 0 && await el.isVisible()) {
+                    return false
+                }
+            } catch (e) { }
+        }
+        // 检查是否有用户头像（表示已登录）
+        const hasAvatar = await page.locator('.header-avatar, .mini-avatar, [class*="avatar"]').count()
+        return hasAvatar > 0
+    }
+
     try {
         console.log('[Bilibili] 开始上传...')
         onProgress(10)
@@ -36,6 +99,16 @@ async function uploadToBilibili(data, onProgress, accountNum = 1) {
         onProgress(20)
 
         await page.waitForTimeout(5000)
+
+        // 检查是否需要登录，未登录则等待用户扫码
+        if (!await checkLoginStatus()) {
+            await waitForLogin(page, 'Bilibili', checkLoginStatus, onProgress, accountNum)
+            await page.goto('https://member.bilibili.com/platform/upload/video/frame', {
+                waitUntil: 'load',
+                timeout: 120000
+            })
+            await page.waitForTimeout(3000)
+        }
 
         // B站文件上传选择器
         const fileInput = page.locator('input[type="file"]').first()
@@ -159,9 +232,15 @@ async function uploadToDouyin(data, onProgress, accountNum = 1) {
 
         await page.waitForTimeout(5000)
 
-        // 检查是否需要登录
+        // 检查是否需要登录，未登录则等待用户扫码
         if (!await checkLoginStatus()) {
-            throw new Error('Cookie已失效，请重新登录抖音')
+            await waitForLogin(page, 'Douyin', checkLoginStatus, onProgress, accountNum)
+            // 登录成功后刷新页面重新开始
+            await page.goto('https://creator.douyin.com/creator-micro/content/upload', {
+                waitUntil: 'load',
+                timeout: 120000
+            })
+            await page.waitForTimeout(3000)
         }
 
         // 抖音文件上传选择器 - 参考 social-auto-upload
@@ -247,6 +326,25 @@ async function uploadToDouyin(data, onProgress, accountNum = 1) {
 async function uploadToXiaohongshu(data, onProgress, accountNum = 1) {
     const page = await browserManager.getPage('xiaohongshu', accountNum)
 
+    // 登录状态检测函数
+    const checkLoginStatus = async () => {
+        const loginIndicators = [
+            'text=登录',
+            'text=扫码登录',
+            '[class*="login"]',
+            'text=手机号登录'
+        ]
+        for (const selector of loginIndicators) {
+            try {
+                const el = page.locator(selector).first()
+                if (await el.count() > 0 && await el.isVisible()) {
+                    return false
+                }
+            } catch (e) { }
+        }
+        return true
+    }
+
     try {
         console.log('[Xiaohongshu] 开始上传...')
         onProgress(10)
@@ -259,6 +357,16 @@ async function uploadToXiaohongshu(data, onProgress, accountNum = 1) {
         onProgress(20)
 
         await page.waitForTimeout(5000)
+
+        // 检查是否需要登录，未登录则等待用户扫码
+        if (!await checkLoginStatus()) {
+            await waitForLogin(page, 'Xiaohongshu', checkLoginStatus, onProgress, accountNum)
+            await page.goto('https://creator.xiaohongshu.com/publish/publish?source=official', {
+                waitUntil: 'load',
+                timeout: 120000
+            })
+            await page.waitForTimeout(3000)
+        }
 
         // 点击视频发布标签（使用更精确的选择器）
         try {
@@ -363,6 +471,25 @@ async function uploadToXiaohongshu(data, onProgress, accountNum = 1) {
 async function uploadToKuaishou(data, onProgress, accountNum = 1) {
     const page = await browserManager.getPage('kuaishou', accountNum)
 
+    // 登录状态检测函数
+    const checkLoginStatus = async () => {
+        const loginIndicators = [
+            'text=登录',
+            'text=扫码登录',
+            '[class*="login"]',
+            'text=请先登录'
+        ]
+        for (const selector of loginIndicators) {
+            try {
+                const el = page.locator(selector).first()
+                if (await el.count() > 0 && await el.isVisible()) {
+                    return false
+                }
+            } catch (e) { }
+        }
+        return true
+    }
+
     try {
         console.log('[Kuaishou] 开始上传...')
         onProgress(10)
@@ -375,6 +502,16 @@ async function uploadToKuaishou(data, onProgress, accountNum = 1) {
         onProgress(20)
 
         await page.waitForTimeout(3000)
+
+        // 检查是否需要登录，未登录则等待用户扫码
+        if (!await checkLoginStatus()) {
+            await waitForLogin(page, 'Kuaishou', checkLoginStatus, onProgress, accountNum)
+            await page.goto('https://cp.kuaishou.com/article/publish/video', {
+                waitUntil: 'load',
+                timeout: 120000
+            })
+            await page.waitForTimeout(3000)
+        }
 
         // ★★★ 关闭所有可能的新手指引弹窗 ★★★
         console.log('[Kuaishou] 关闭新手指引弹窗...')
@@ -494,6 +631,25 @@ async function uploadToKuaishou(data, onProgress, accountNum = 1) {
 async function uploadToWechat(data, onProgress, accountNum = 1) {
     const page = await browserManager.getPage('wechat', accountNum)
 
+    // 登录状态检测函数
+    const checkLoginStatus = async () => {
+        const loginIndicators = [
+            'text=扫码登录',
+            'text=请使用微信扫码',
+            '[class*="login"]',
+            'div.title-name:has-text("微信小店")'
+        ]
+        for (const selector of loginIndicators) {
+            try {
+                const el = page.locator(selector).first()
+                if (await el.count() > 0 && await el.isVisible()) {
+                    return false
+                }
+            } catch (e) { }
+        }
+        return true
+    }
+
     try {
         console.log('[WeChat] 开始上传...')
         onProgress(10)
@@ -507,10 +663,14 @@ async function uploadToWechat(data, onProgress, accountNum = 1) {
 
         await page.waitForTimeout(5000)
 
-        // 检查是否需要登录
-        const titleName = await page.locator('div.title-name:has-text("微信小店")').count()
-        if (titleName > 0) {
-            throw new Error('Cookie已失效，请重新登录')
+        // 检查是否需要登录，未登录则等待用户扫码
+        if (!await checkLoginStatus()) {
+            await waitForLogin(page, 'WeChat', checkLoginStatus, onProgress, accountNum)
+            await page.goto('https://channels.weixin.qq.com/platform/post/create', {
+                waitUntil: 'load',
+                timeout: 120000
+            })
+            await page.waitForTimeout(3000)
         }
 
         // 微信视频号文件上传 - 参考 social-auto-upload
