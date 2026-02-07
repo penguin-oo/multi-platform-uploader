@@ -425,32 +425,49 @@ async function uploadToXiaohongshu(data, onProgress, accountNum = 1) {
         }
         onProgress(85)
 
-        // ★★★ 勾选原创声明 ★★★
+        // ★★★ 勾选原创声明（2024年新版界面）★★★
         console.log('[Xiaohongshu] 勾选原创声明...')
         try {
-            // 1. 点击"去声明"链接打开弹窗（不是"声明原创"）
-            const goDeclareBtn = page.locator('text=去声明').first()
-            if (await goDeclareBtn.count() > 0) {
-                await goDeclareBtn.click()
-                console.log('[Xiaohongshu] 已点击去声明')
-                await page.waitForTimeout(1500)
+            // 先滚动到页面底部，让"内容设置"区域可见
+            await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight))
+            await page.waitForTimeout(1000)
 
-                // 2. 勾选"我已阅读并同意《原创声明须知》"
-                const agreeCheckbox = page.locator('text=我已阅读并同意').first()
-                if (await agreeCheckbox.count() > 0) {
-                    await agreeCheckbox.click()
-                    console.log('[Xiaohongshu] 已勾选同意条款')
-                    await page.waitForTimeout(500)
-
-                    // 3. 点击"声明原创"确认按钮
-                    const confirmBtn = page.locator('button:has-text("声明原创")').first()
-                    if (await confirmBtn.count() > 0) {
-                        await confirmBtn.click()
-                        console.log('[Xiaohongshu] 已确认原创声明')
+            // 新版界面：原创声明在"内容设置"区域，是一个开关
+            // 方案1: 查找包含"原创声明"文字的行，点击其中的开关
+            const originalRow = page.locator('.custom-switch-card:has-text("原创声明")').first()
+            if (await originalRow.count() > 0) {
+                const switchBtn = originalRow.locator('.d-switch').first()
+                if (await switchBtn.count() > 0) {
+                    // 检查开关是否已开启（通过class或aria属性判断）
+                    const isChecked = await switchBtn.evaluate(el =>
+                        el.classList.contains('checked') || el.getAttribute('aria-checked') === 'true'
+                    )
+                    if (!isChecked) {
+                        await switchBtn.click()
+                        console.log('[Xiaohongshu] 已开启原创声明开关')
+                    } else {
+                        console.log('[Xiaohongshu] 原创声明已开启')
                     }
                 }
             } else {
-                console.log('[Xiaohongshu] 未找到"去声明"按钮，可能已声明或不支持')
+                // 方案2: 旧版界面兼容 - 查找"去声明"按钮
+                const goDeclareBtn = page.locator('text=去声明').first()
+                if (await goDeclareBtn.count() > 0) {
+                    await goDeclareBtn.click()
+                    await page.waitForTimeout(1500)
+                    const agreeCheckbox = page.locator('text=我已阅读并同意').first()
+                    if (await agreeCheckbox.count() > 0) {
+                        await agreeCheckbox.click()
+                        await page.waitForTimeout(500)
+                        const confirmBtn = page.locator('button:has-text("声明原创")').first()
+                        if (await confirmBtn.count() > 0) {
+                            await confirmBtn.click()
+                            console.log('[Xiaohongshu] 已确认原创声明（旧版）')
+                        }
+                    }
+                } else {
+                    console.log('[Xiaohongshu] 未找到原创声明选项')
+                }
             }
         } catch (e) {
             console.log('[Xiaohongshu] 勾选原创声明失败:', e.message)
