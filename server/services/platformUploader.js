@@ -479,7 +479,22 @@ async function uploadToXiaohongshu(data, onProgress, accountNum = 1) {
                     )
                     if (!isChecked) {
                         await switchBtn.click()
-                        console.log('[Xiaohongshu] 已开启原创声明开关')
+                        console.log('[Xiaohongshu] 已点击原创声明开关')
+
+                        // ★ 点击开关后会弹出弹窗，需要处理弹窗
+                        await page.waitForTimeout(1500)
+                        const agreeCheckbox = page.locator('text=我已阅读并同意').first()
+                        if (await agreeCheckbox.count() > 0) {
+                            await agreeCheckbox.click()
+                            console.log('[Xiaohongshu] 已勾选同意条款')
+                            await page.waitForTimeout(500)
+
+                            const confirmBtn = page.locator('button:has-text("声明原创")').first()
+                            if (await confirmBtn.count() > 0) {
+                                await confirmBtn.click()
+                                console.log('[Xiaohongshu] 已确认原创声明')
+                            }
+                        }
                     } else {
                         console.log('[Xiaohongshu] 原创声明已开启')
                     }
