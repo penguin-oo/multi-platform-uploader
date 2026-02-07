@@ -403,19 +403,11 @@ async function uploadToXiaohongshu(data, onProgress, accountNum = 1) {
             await page.waitForTimeout(3000)
         }
 
-        // 点击视频发布标签（使用更精确的选择器）
-        try {
-            const videoTab = page.getByRole('button', { name: '上传视频' }).first()
-            if (await videoTab.count() > 0) {
-                await videoTab.click()
-                await page.waitForTimeout(2000)
-            }
-        } catch (e) {
-            console.log('[Xiaohongshu] 视频标签点击跳过')
-        }
+        // ★ 不要点击上传按钮，直接使用 setInputFiles 设置文件
+        // 点击按钮会触发原生文件选择器，而我们需要直接通过 input 元素上传
 
-        // 小红书文件上传
-        const fileInput = page.locator('input[type="file"]').first()
+        // 小红书文件上传 - 直接定位 input[type="file"] 并设置文件
+        const fileInput = page.locator('input[type="file"][accept*="mp4"], input[type="file"][accept*="video"], input[type="file"]').first()
         await fileInput.setInputFiles(data.videoPath)
         console.log('[Xiaohongshu] 视频开始上传...')
         onProgress(30)
