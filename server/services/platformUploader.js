@@ -223,14 +223,49 @@ async function uploadToDouyin(data, onProgress, accountNum = 1) {
         console.log('[Douyin] 开始上传...')
         onProgress(10)
 
-        await page.goto('https://creator.douyin.com/creator-micro/content/upload', {
-            waitUntil: 'load',
-            timeout: 120000
-        })
-        console.log('[Douyin] 页面加载完成')
-        onProgress(20)
+        // ★★★ 页面加载 + 自动刷新机制 ★★★
+        const maxRetries = 3
+        let pageReady = false
 
-        await page.waitForTimeout(5000)
+        for (let retry = 0; retry < maxRetries && !pageReady; retry++) {
+            if (retry > 0) {
+                console.log(`[Douyin] 页面似乎卡住了，第${retry}次刷新...`)
+            }
+
+            await page.goto('https://creator.douyin.com/creator-micro/content/upload', {
+                waitUntil: 'load',
+                timeout: 120000
+            })
+
+            // 等待页面渲染
+            await page.waitForTimeout(5000)
+
+            // 检查页面是否正常加载（上传区域是否出现）
+            const uploadArea = page.locator("div[class^='container'] input, .upload-btn, input[type='file']")
+            const uploadAreaCount = await uploadArea.count()
+
+            if (uploadAreaCount > 0) {
+                console.log('[Douyin] 页面加载完成')
+                pageReady = true
+            } else {
+                // 检查是否是登录页面
+                if (!await checkLoginStatus()) {
+                    console.log('[Douyin] 检测到登录页面')
+                    await waitForLogin(page, 'Douyin', checkLoginStatus, onProgress, accountNum)
+                    // 登录后重新加载
+                    continue
+                }
+                // 页面卡住，等待后会自动刷新
+                console.log('[Douyin] 未检测到上传区域，等待2秒后刷新...')
+                await page.waitForTimeout(2000)
+            }
+        }
+
+        if (!pageReady) {
+            throw new Error('页面多次刷新后仍无法加载，请手动检查')
+        }
+
+        onProgress(20)
 
         // 检查是否需要登录，未登录则等待用户扫码
         if (!await checkLoginStatus()) {
